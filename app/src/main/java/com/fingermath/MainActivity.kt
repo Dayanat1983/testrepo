@@ -82,7 +82,7 @@ private fun HomeScreen(onFlash: () -> Unit, onInput: () -> Unit) {
     ) {
         Text("Finger Math", style = MaterialTheme.typography.displaySmall)
         Spacer(Modifier.height(32.dp))
-        Button(onClick = onFlash, modifier = Modifier.fillMaxWidth()) { Text("Режим 1: жесты → сумма") }
+        Button(onClick = onFlash, modifier = Modifier.fillMaxWidth()) { Text("Режим 1: флеш-анзан (жесты или цифры)") }
         Spacer(Modifier.height(12.dp))
         Button(onClick = onInput, modifier = Modifier.fillMaxWidth()) {
             Text("Режим 2: пример → пальцы")

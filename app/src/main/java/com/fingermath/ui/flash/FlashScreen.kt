@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.fingermath.domain.flash.FlashDisplay
 import com.fingermath.domain.flash.FlashSettings
 import com.fingermath.domain.gesture.GestureMapper
 import com.fingermath.ui.components.NumberHands
@@ -56,11 +57,18 @@ fun FlashScreen(viewModel: FlashViewModel, modifier: Modifier = Modifier) {
                 is FlashUiState.Showing -> {
                     Text("${s.index} / ${s.total}", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(24.dp))
-                    // Пауза между жестами: руки скрыты, но занимают то же место — макет не «прыгает».
-                    NumberHands(
-                        gesture = s.gesture ?: GestureMapper.toGesture(0),
-                        modifier = Modifier.alpha(if (s.gesture == null) 0f else 1f),
-                    )
+                    // Пауза между показами: содержимое скрыто, но занимает то же место — макет не «прыгает».
+                    val hidden = Modifier.alpha(if (s.value == null) 0f else 1f)
+                    when (s.display) {
+                        FlashDisplay.HANDS -> NumberHands(GestureMapper.toGesture(s.value ?: 0), hidden)
+                        FlashDisplay.DIGITS -> Text(
+                            text = (s.value ?: 0).toString(),
+                            fontSize = 120.sp,
+                            style = MaterialTheme.typography.displayLarge,
+                            textAlign = TextAlign.Center,
+                            modifier = hidden.fillMaxWidth(),
+                        )
+                    }
                 }
                 is FlashUiState.Answer -> AnswerContent(s, viewModel)
                 is FlashUiState.Result -> ResultContent(s, viewModel)
@@ -71,8 +79,20 @@ fun FlashScreen(viewModel: FlashViewModel, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SetupContent(settings: FlashSettings, vm: FlashViewModel) {
-    Text("Флеш-анзан: жесты", style = MaterialTheme.typography.headlineMedium)
+    Text("Флеш-анзан", style = MaterialTheme.typography.headlineMedium)
     Spacer(Modifier.height(24.dp))
+
+    Text("Что показывать")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for ((mode, label) in listOf(FlashDisplay.HANDS to "Жесты", FlashDisplay.DIGITS to "Цифры")) {
+            FilterChip(
+                selected = settings.display == mode,
+                onClick = { vm.updateSettings { it.copy(display = mode) } },
+                label = { Text(label) },
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
 
     Text("Количество жестов: ${settings.count}")
     Slider(

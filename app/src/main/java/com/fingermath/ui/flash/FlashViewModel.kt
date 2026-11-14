@@ -2,10 +2,9 @@ package com.fingermath.ui.flash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.fingermath.domain.flash.FlashDisplay
 import com.fingermath.domain.flash.FlashSettings
 import com.fingermath.domain.flash.NumberSequenceGenerator
-import com.fingermath.domain.gesture.GestureMapper
-import com.fingermath.domain.gesture.NumberGesture
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,8 +16,8 @@ sealed interface FlashUiState {
     data class Setup(val settings: FlashSettings) : FlashUiState
     data class Countdown(val seconds: Int) : FlashUiState
 
-    /** [gesture] == null — короткая пауза между жестами (руки скрыты), чтобы одинаковые подряд числа не сливались. */
-    data class Showing(val index: Int, val total: Int, val gesture: NumberGesture?) : FlashUiState
+    /** [value] == null — короткая пауза между показами (всё скрыто), чтобы одинаковые подряд числа не сливались. */
+    data class Showing(val index: Int, val total: Int, val value: Int?, val display: FlashDisplay) : FlashUiState
     data class Answer(val input: String) : FlashUiState
     data class Result(val numbers: List<Int>, val expected: Int, val given: Int?) : FlashUiState {
         val isCorrect: Boolean get() = given == expected
@@ -45,6 +44,7 @@ class FlashViewModel(
         job?.cancel()
         numbers = generator.generate(settings)
         val total = numbers.size
+        val display = settings.display
         val gapMs = minOf(GAP_MS, settings.intervalMs / 5)
         val showMs = settings.intervalMs - gapMs // показ + пауза == интервал, темп не «плывёт»
         job = viewModelScope.launch {
@@ -53,9 +53,9 @@ class FlashViewModel(
                 delay(700)
             }
             numbers.forEachIndexed { i, n ->
-                _state.value = FlashUiState.Showing(i + 1, total, GestureMapper.toGesture(n))
+                _state.value = FlashUiState.Showing(i + 1, total, n, display)
                 delay(showMs)
-                _state.value = FlashUiState.Showing(i + 1, total, null)
+                _state.value = FlashUiState.Showing(i + 1, total, null, display)
                 delay(gapMs)
             }
             _state.value = FlashUiState.Answer("")
