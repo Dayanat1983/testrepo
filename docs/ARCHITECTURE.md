@@ -11,10 +11,12 @@ app/src/main/java/com/fingermath/
 │  ├─ gesture/
 │  │  ├─ HandGesture.kt       Finger, enum HandGesture (цифра 0..9 -> набор пальцев)
 │  │  └─ GestureMapper.kt     число 0..99 -> NumberGesture(tens, ones), и обратно
-│  └─ flash/FlashSession.kt   FlashSettings, NumberSequenceGenerator
+│  ├─ flash/FlashSession.kt   FlashSettings, NumberSequenceGenerator
+│  └─ input/Problem.kt        ArithmeticProblem, InputSettings, ProblemGenerator
 ├─ ui/
-│  ├─ components/HandView.kt  HandView (одна рука, Canvas) и NumberHands (пара рук)
+│  ├─ components/             HandView (Canvas, опционально кликабельный), HandGeometry (координаты и hit-test)
 │  ├─ flash/                  Режим 1: FlashViewModel (StateFlow) + FlashScreen (Compose)
+│  ├─ input/                  Режим 2: InputViewModel + InputScreen
 │  └─ theme/
 └─ MainActivity.kt            главный экран и простая навигация
 ```
@@ -47,11 +49,22 @@ MVVM: `FlashScreen` только отрисовывает `FlashUiState` и шл
 - Корутина во `viewModelScope`; `Back` и «Настройки» отменяют сессию.
 - Макет ограничен по ширине 560dp, руки масштабируются через `aspectRatio` + `weight`.
 
+## Режим 2 (реализован)
+
+`Setup -> Playing(пример i/N) -> проверка -> Дальше ... -> Finished(счёт)`
+- Показывается пример «12 + 5 = ?», пользователь нажимает пальцы обеих рук (десятки слева, единицы справа),
+  затем «Проверить». Кнопка «Сбросить» опускает все пальцы.
+- Нажатие определяется в `HandGeometry.fingerAt` в виртуальных координатах руки (для левой x отражается);
+  зоны не зависят от того, поднят палец или сложен.
+- Пальцы переключаются свободно, поэтому можно выложить несуществующую комбинацию (например, один мизинец):
+  `GestureMapper.toValue` вернёт null, и ответ засчитывается неверным с пометкой «Такого жеста нет».
+- Генератор гарантирует, что операнды и ответ лежат в 1..maxValue (до 9 / 50 / 99); действия: +, −, оба.
+- После проверки руки блокируются, показывается правильный ответ.
+
 ## План расширения
 
 | Что | Куда добавлять |
 |---|---|
-| Режим 2 (ввод пальцами) | `ui/input/`: `HandView` + `clickable` по пальцам, сверка через `GestureMapper.toValue` |
 | Звук | интерфейс `SoundPlayer` в `domain`, реализация на `SoundPool`, вызов из ViewModel |
 | Очки, уровни | `domain/score/` + Room/DataStore; `FlashSettings` уже параметризует сложность |
 | Таймер на ответ | дополнительная фаза в `FlashViewModel.start()` |

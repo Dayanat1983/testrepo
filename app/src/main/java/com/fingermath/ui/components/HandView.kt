@@ -1,15 +1,18 @@
 package com.fingermath.ui.components
 
-import androidx.compose.runtime.State
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -18,17 +21,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.fingermath.domain.gesture.Finger
-import com.fingermath.domain.gesture.HandGesture
 import com.fingermath.domain.gesture.NumberGesture
+import com.fingermath.ui.components.HandGeometry as G
 
 /**
- * Рука, нарисованная векторно (Canvas) в виртуальной системе координат 100x130.
- * Ресурсов-картинок нет: масштабируется на любой экран без потерь, а состояние каждого пальца —
- * независимый параметр, поэтому тот же компонент подойдёт для интерактивного Режима 2.
+ * Рука, нарисованная векторно (Canvas). Ресурсов-картинок нет: масштабируется на любой экран без потерь,
+ * а состояние каждого пальца независимо — поэтому тот же компонент работает и для показа (Режим 1),
+ * и для ввода (Режим 2, [onFingerClick] != null).
  *
  * [mirrored] = true рисует левую руку (большой палец справа).
  */
@@ -37,10 +41,11 @@ fun HandView(
     counted: Set<Finger>,
     mirrored: Boolean,
     modifier: Modifier = Modifier,
+    onFingerClick: ((Finger) -> Unit)? = null,
     activeColor: Color = MaterialTheme.colorScheme.primary,
     idleColor: Color = MaterialTheme.colorScheme.surfaceVariant,
 ) {
-    // Короткая анимация (80 мс) — смена выглядит плавной, но не «размазывает» быстрые интервалы 0.5 с.
+    // Короткая анимация (80 мс): смена выглядит плавной, но не «размазывает» интервалы от 0.5 с.
     val progress: List<State<Float>> = Finger.entries.map { finger ->
         animateFloatAsState(
             targetValue = if (finger in counted) 1f else 0f,
@@ -49,9 +54,21 @@ fun HandView(
         )
     }
     val palmColor = lerp(idleColor, Color.Black, 0.08f)
+    val currentClick by rememberUpdatedState(onFingerClick)
+    val tapModifier = if (onFingerClick != null) {
+        Modifier.pointerInput(mirrored) {
+            detectTapGestures { tap ->
+                val s = size.width / G.W
+                val x = if (mirrored) G.W - tap.x / s else tap.x / s
+                G.fingerAt(x, tap.y / s)?.let { currentClick?.invoke(it) }
+            }
+        }
+    } else {
+        Modifier
+    }
 
-    Canvas(modifier.aspectRatio(W / H)) {
-        val s = size.width / W
+    Canvas(modifier.aspectRatio(G.W / G.H).then(tapModifier)) {
+        val s = size.width / G.W
         withTransform({
             if (mirrored) {
                 translate(left = size.width)
@@ -61,15 +78,15 @@ fun HandView(
             }
         }) {
             // Четыре пальца: сложенный = короткий бугорок над ладонью, выставленный = длинный и цветной.
-            for (finger in FOUR_FINGERS) {
+            for (finger in G.FOUR_FINGERS) {
                 val t = progress[finger.ordinal].value
-                val x = FINGER_X.getValue(finger)
-                val length = FOLDED_LEN + (FINGER_LEN.getValue(finger) - FOLDED_LEN) * t
+                val x = G.FINGER_X.getValue(finger)
+                val length = G.FOLDED_LEN + (G.FINGER_LEN.getValue(finger) - G.FOLDED_LEN) * t
                 drawLine(
                     color = lerp(idleColor, activeColor, t),
-                    start = Offset(x, FINGER_BASE_Y),
-                    end = Offset(x, FINGER_BASE_Y - length),
-                    strokeWidth = FINGER_W,
+                    start = Offset(x, G.FINGER_BASE_Y),
+                    end = Offset(x, G.FINGER_BASE_Y - length),
+                    strokeWidth = G.FINGER_W,
                     cap = StrokeCap.Round,
                 )
             }
@@ -79,49 +96,61 @@ fun HandView(
                 size = Size(72f, 60f),
                 cornerRadius = CornerRadius(16f, 16f),
             )
-            // Большой палец рисуем поверх ладони: сложенный лежит на ней.
+            // Большой палец поверх ладони: сложенный лежит на ней.
             val tt = progress[Finger.THUMB.ordinal].value
             drawLine(
                 color = lerp(idleColor, activeColor, tt),
-                start = THUMB_BASE,
+                start = Offset(G.THUMB_BASE_X, G.THUMB_BASE_Y),
                 end = Offset(
-                    THUMB_FOLDED.x + (THUMB_RAISED.x - THUMB_FOLDED.x) * tt,
-                    THUMB_FOLDED.y + (THUMB_RAISED.y - THUMB_FOLDED.y) * tt,
+                    G.THUMB_FOLDED_X + (G.THUMB_RAISED_X - G.THUMB_FOLDED_X) * tt,
+                    G.THUMB_FOLDED_Y + (G.THUMB_RAISED_Y - G.THUMB_FOLDED_Y) * tt,
                 ),
-                strokeWidth = THUMB_W,
+                strokeWidth = G.THUMB_W,
                 cap = StrokeCap.Round,
             )
         }
     }
 }
 
-/** Обе руки числа: слева десятки, справа единицы (большие пальцы смотрят к центру). */
+/** Режим 1: показ числа. Слева десятки, справа единицы (большие пальцы смотрят к центру). */
 @Composable
 fun NumberHands(gesture: NumberGesture, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = "Число ${gesture.value}" },
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        HandView(gesture.tens.pressed, mirrored = true, modifier = Modifier.weight(1f))
-        HandView(gesture.ones.pressed, mirrored = false, modifier = Modifier.weight(1f))
-    }
+    HandsRow(
+        tens = gesture.tens.pressed,
+        ones = gesture.ones.pressed,
+        modifier = modifier.semantics { contentDescription = "Число ${gesture.value}" },
+    )
+}
+
+/** Режим 2: те же руки, но каждый палец нажимается. */
+@Composable
+fun InteractiveHands(
+    tens: Set<Finger>,
+    ones: Set<Finger>,
+    enabled: Boolean,
+    onTensClick: (Finger) -> Unit,
+    onOnesClick: (Finger) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    HandsRow(
+        tens = tens,
+        ones = ones,
+        modifier = modifier,
+        onTensClick = if (enabled) onTensClick else null,
+        onOnesClick = if (enabled) onOnesClick else null,
+    )
 }
 
 @Composable
-fun HandView(gesture: HandGesture, mirrored: Boolean, modifier: Modifier = Modifier) =
-    HandView(gesture.pressed, mirrored, modifier)
-
-private const val W = 100f
-private const val H = 130f
-private const val FINGER_W = 13f
-private const val THUMB_W = 14f
-private const val FINGER_BASE_Y = 72f
-private const val FOLDED_LEN = 10f
-private val FOUR_FINGERS = listOf(Finger.INDEX, Finger.MIDDLE, Finger.RING, Finger.PINKY)
-private val FINGER_X = mapOf(Finger.INDEX to 30f, Finger.MIDDLE to 45f, Finger.RING to 60f, Finger.PINKY to 75f)
-private val FINGER_LEN = mapOf(Finger.INDEX to 56f, Finger.MIDDLE to 62f, Finger.RING to 56f, Finger.PINKY to 44f)
-private val THUMB_BASE = Offset(26f, 104f)
-private val THUMB_FOLDED = Offset(38f, 98f)
-private val THUMB_RAISED = Offset(10f, 74f)
+private fun HandsRow(
+    tens: Set<Finger>,
+    ones: Set<Finger>,
+    modifier: Modifier = Modifier,
+    onTensClick: ((Finger) -> Unit)? = null,
+    onOnesClick: ((Finger) -> Unit)? = null,
+) {
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        HandView(tens, mirrored = true, modifier = Modifier.weight(1f), onFingerClick = onTensClick)
+        HandView(ones, mirrored = false, modifier = Modifier.weight(1f), onFingerClick = onOnesClick)
+    }
+}

@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.fingermath.ui.flash.FlashScreen
 import com.fingermath.ui.flash.FlashViewModel
+import com.fingermath.ui.input.InputScreen
+import com.fingermath.ui.input.InputViewModel
 import com.fingermath.ui.theme.FingerMathTheme
 
 class MainActivity : ComponentActivity() {
@@ -41,13 +43,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Screen { HOME, FLASH }
+private enum class Screen { HOME, FLASH, INPUT }
 
 @Composable
 private fun AppRoot() {
     var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
     when (screen) {
-        Screen.HOME -> HomeScreen(onFlash = { screen = Screen.FLASH })
+        Screen.HOME -> HomeScreen(
+            onFlash = { screen = Screen.FLASH },
+            onInput = { screen = Screen.INPUT },
+        )
         Screen.FLASH -> {
             val vm: FlashViewModel = viewModel()
             // Back останавливает сессию и возвращает на главный экран.
@@ -57,11 +62,19 @@ private fun AppRoot() {
             }
             FlashScreen(vm)
         }
+        Screen.INPUT -> {
+            val vm: InputViewModel = viewModel()
+            BackHandler {
+                vm.reset()
+                screen = Screen.HOME
+            }
+            InputScreen(vm)
+        }
     }
 }
 
 @Composable
-private fun HomeScreen(onFlash: () -> Unit) {
+private fun HomeScreen(onFlash: () -> Unit, onInput: () -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -71,8 +84,8 @@ private fun HomeScreen(onFlash: () -> Unit) {
         Spacer(Modifier.height(32.dp))
         Button(onClick = onFlash, modifier = Modifier.fillMaxWidth()) { Text("Режим 1: жесты → сумма") }
         Spacer(Modifier.height(12.dp))
-        Button(onClick = {}, enabled = false, modifier = Modifier.fillMaxWidth()) {
-            Text("Режим 2: ввод пальцами (скоро)")
+        Button(onClick = onInput, modifier = Modifier.fillMaxWidth()) {
+            Text("Режим 2: пример → пальцы")
         }
     }
 }
