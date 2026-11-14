@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fingermath.domain.flash.FlashDisplay
 import com.fingermath.domain.flash.FlashSettings
+import com.fingermath.domain.flash.asExpression
 import com.fingermath.domain.gesture.GestureMapper
 import com.fingermath.ui.components.NumberHands
 
@@ -58,11 +59,20 @@ fun FlashScreen(viewModel: FlashViewModel, modifier: Modifier = Modifier) {
                     Text("${s.index} / ${s.total}", style = MaterialTheme.typography.titleMedium)
                     Spacer(Modifier.height(24.dp))
                     // Пауза между показами: содержимое скрыто, но занимает то же место — макет не «прыгает».
-                    val hidden = Modifier.alpha(if (s.value == null) 0f else 1f)
+                    val hidden = Modifier.alpha(if (s.step == null) 0f else 1f)
+                    // Действие называется перед каждым шагом: пользователь знает, прибавлять или вычитать.
+                    val isPlus = s.step?.isPlus ?: true
+                    Text(
+                        text = if (isPlus) "Сложение  +" else "Вычитание  −",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = if (isPlus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        modifier = hidden,
+                    )
+                    Spacer(Modifier.height(16.dp))
                     when (s.display) {
-                        FlashDisplay.HANDS -> NumberHands(GestureMapper.toGesture(s.value ?: 0), hidden)
+                        FlashDisplay.HANDS -> NumberHands(GestureMapper.toGesture(s.step?.value ?: 0), hidden)
                         FlashDisplay.DIGITS -> Text(
-                            text = (s.value ?: 0).toString(),
+                            text = (s.step?.value ?: 0).toString(),
                             fontSize = 120.sp,
                             style = MaterialTheme.typography.displayLarge,
                             textAlign = TextAlign.Center,
@@ -108,6 +118,17 @@ private fun SetupContent(settings: FlashSettings, vm: FlashViewModel) {
         valueRange = 500f..2000f,
         steps = 14,
     )
+    Text("Действия")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for ((sub, label) in listOf(false to "Только сложение", true to "Сложение и вычитание")) {
+            FilterChip(
+                selected = settings.allowSubtraction == sub,
+                onClick = { vm.updateSettings { it.copy(allowSubtraction = sub) } },
+                label = { Text(label) },
+            )
+        }
+    }
+    Spacer(Modifier.height(12.dp))
     Text("Числа")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for ((max, label) in listOf(9 to "1–9", 50 to "1–50", 99 to "1–99")) {
@@ -151,7 +172,7 @@ private fun ResultContent(s: FlashUiState.Result, vm: FlashViewModel) {
     Text("Ваш ответ: ${s.given ?: "—"}")
     Text("Правильный ответ: ${s.expected}")
     Spacer(Modifier.height(8.dp))
-    Text(s.numbers.joinToString(" + "), textAlign = TextAlign.Center)
+    Text(s.steps.asExpression(), textAlign = TextAlign.Center)
     Spacer(Modifier.height(24.dp))
     Button(onClick = vm::start, modifier = Modifier.fillMaxWidth()) { Text("Ещё раз") }
     Spacer(Modifier.height(8.dp))
