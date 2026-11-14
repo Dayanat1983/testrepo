@@ -6,6 +6,7 @@ import com.fingermath.domain.flash.NumberSequenceGenerator
 import com.fingermath.domain.flash.asExpression
 import com.fingermath.domain.flash.total
 import com.fingermath.domain.gesture.Finger
+import com.fingermath.domain.input.OpMode
 import com.fingermath.domain.gesture.GestureMapper
 import com.fingermath.domain.gesture.HandGesture
 import org.junit.Assert.assertEquals
@@ -71,9 +72,21 @@ class GestureTest {
     @Test
     fun additionOnlyAndMixedModes() {
         val gen = NumberSequenceGenerator(Random(9))
-        assertTrue(gen.generate(FlashSettings(count = 200, allowSubtraction = false)).all { it.isPlus })
-        val mixed = gen.generate(FlashSettings(count = 200, allowSubtraction = true))
+        assertTrue(gen.generate(FlashSettings(count = 200, ops = OpMode.PLUS)).all { it.isPlus })
+        val mixed = gen.generate(FlashSettings(count = 200, ops = OpMode.BOTH))
         assertTrue(mixed.any { !it.isPlus } && mixed.any { it.isPlus })
+    }
+
+    @Test
+    fun subtractionOnlyStartsWithStartNumberThenOnlySubtracts() {
+        for (max in listOf(1, 9, 50, 99)) for (count in listOf(1, 3, 20)) repeat(200) { seed ->
+            val seq = NumberSequenceGenerator(Random(seed)).generate(FlashSettings(count = count, maxValue = max, ops = OpMode.MINUS))
+            assertEquals(count, seq.size)
+            assertTrue(seq.first().isStart && seq.first().isPlus && seq.first().value in 1..99)
+            assertTrue(seq.drop(1).all { !it.isPlus && !it.isStart && it.value in 1..max })
+            var run = 0
+            for (st in seq) { run += st.signed; assertTrue("$seq", run >= 0) }
+        }
     }
 
     @Test

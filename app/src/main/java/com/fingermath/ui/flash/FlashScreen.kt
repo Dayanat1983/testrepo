@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.fingermath.domain.flash.FlashDisplay
 import com.fingermath.domain.flash.FlashSettings
 import com.fingermath.domain.flash.asExpression
+import com.fingermath.domain.input.OpMode
 import com.fingermath.domain.gesture.GestureMapper
 import com.fingermath.ui.components.NumberHands
 
@@ -61,23 +62,33 @@ fun FlashScreen(viewModel: FlashViewModel, modifier: Modifier = Modifier) {
                     // Пауза между показами: содержимое скрыто, но занимает то же место — макет не «прыгает».
                     val hidden = Modifier.alpha(if (s.step == null) 0f else 1f)
                     // Действие называется перед каждым шагом: пользователь знает, прибавлять или вычитать.
-                    val isPlus = s.step?.isPlus ?: true
+                    val step = s.step
+                    val isMinus = step != null && !step.isPlus
                     Text(
-                        text = if (isPlus) "Сложение  +" else "Вычитание  −",
+                        text = when {
+                            step?.isStart == true -> "Начальное число"
+                            isMinus -> "Вычитание  −"
+                            else -> "Сложение  +"
+                        },
                         style = MaterialTheme.typography.headlineMedium,
-                        color = if (isPlus) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                        color = if (isMinus) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
                         modifier = hidden,
                     )
                     Spacer(Modifier.height(16.dp))
-                    when (s.display) {
-                        FlashDisplay.HANDS -> NumberHands(GestureMapper.toGesture(s.step?.value ?: 0), hidden)
-                        FlashDisplay.DIGITS -> Text(
-                            text = (s.step?.value ?: 0).toString(),
-                            fontSize = 120.sp,
-                            style = MaterialTheme.typography.displayLarge,
-                            textAlign = TextAlign.Center,
-                            modifier = hidden.fillMaxWidth(),
-                        )
+                    val value = s.step?.value ?: 0
+                    Column(hidden, horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (s.display != FlashDisplay.HANDS) {
+                            Text(
+                                text = value.toString(),
+                                fontSize = if (s.display == FlashDisplay.BOTH) 72.sp else 120.sp,
+                                style = MaterialTheme.typography.displayLarge,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        if (s.display != FlashDisplay.DIGITS) {
+                            NumberHands(GestureMapper.toGesture(value))
+                        }
                     }
                 }
                 is FlashUiState.Answer -> AnswerContent(s, viewModel)
@@ -94,7 +105,7 @@ private fun SetupContent(settings: FlashSettings, vm: FlashViewModel) {
 
     Text("Что показывать")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for ((mode, label) in listOf(FlashDisplay.HANDS to "Жесты", FlashDisplay.DIGITS to "Цифры")) {
+        for ((mode, label) in listOf(FlashDisplay.HANDS to "Жесты", FlashDisplay.DIGITS to "Цифры", FlashDisplay.BOTH to "Оба")) {
             FilterChip(
                 selected = settings.display == mode,
                 onClick = { vm.updateSettings { it.copy(display = mode) } },
@@ -120,10 +131,10 @@ private fun SetupContent(settings: FlashSettings, vm: FlashViewModel) {
     )
     Text("Действия")
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for ((sub, label) in listOf(false to "Только сложение", true to "Сложение и вычитание")) {
+        for ((sub, label) in listOf(OpMode.PLUS to "Только +", OpMode.BOTH to "+ и −", OpMode.MINUS to "Только −")) {
             FilterChip(
-                selected = settings.allowSubtraction == sub,
-                onClick = { vm.updateSettings { it.copy(allowSubtraction = sub) } },
+                selected = settings.ops == sub,
+                onClick = { vm.updateSettings { it.copy(ops = sub) } },
                 label = { Text(label) },
             )
         }
